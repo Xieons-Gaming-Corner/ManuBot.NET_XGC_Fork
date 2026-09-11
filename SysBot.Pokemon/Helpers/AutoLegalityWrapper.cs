@@ -1,10 +1,9 @@
-using PKHeX.Core;
-using PKHeX.Core.AutoMod;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using static PKHeX.Core.EntityContextExtensions;
+using PKHeX.Core;
+using PKHeX.Core.AutoMod;
 
 namespace SysBot.Pokemon;
 
@@ -83,11 +82,13 @@ public static class AutoLegalityWrapper
 
         // Seed the Trainer Database with enough fake save files so that we return a generation sensitive format when needed.
         var fallback = GetDefaultTrainer(cfg);
-        for (var context = (EntityContext)1; context <= Latest.Context; context++)
+        for (var context = EntityContext.Gen1; context < EntityContext.MaxInvalid; context++)
         {
+            if (context == EntityContext.SplitInvalid)
+                continue;
             var versions = GameUtil.GetVersionsInGeneration(context, Latest.Version);
             foreach (var version in versions)
-                RegisterIfNoneExist(fallback, context, version);
+                RegisterIfNoneExist(fallback, context.Generation, version);
         }
     }
 
@@ -107,7 +108,7 @@ public static class AutoLegalityWrapper
         return fallback;
     }
 
-    private static void RegisterIfNoneExist(SimpleTrainerInfo fallback, EntityContext context, GameVersion version)
+    private static void RegisterIfNoneExist(SimpleTrainerInfo fallback, byte generation, GameVersion version)
     {
         fallback = new SimpleTrainerInfo(version)
         {
@@ -115,17 +116,16 @@ public static class AutoLegalityWrapper
             TID16 = fallback.TID16,
             SID16 = fallback.SID16,
             OT = fallback.OT,
-            Context = context,
-            Generation = context.Generation,
+            Generation = generation,
         };
-        var exist = TrainerSettings.GetSavedTrainerData(context, version, fallback);
+        var exist = TrainerSettings.GetSavedTrainerData((EntityContext)generation, version, fallback);
         if (exist is SimpleTrainerInfo) // not anything from files; this assumes ALM returns SimpleTrainerInfo for non-user-provided fake templates.
             TrainerSettings.Register(fallback);
     }
 
-    public static bool CanBeTraded(this PKM pk)
+    public static bool CanBeTraded(this PKM pk, IEncounterTemplate enc)
     {
-        if (pk.IsNicknamed)
+        if (pk.IsNicknamed && enc is not IFixedNickname {IsFixedNickname: true})
         {
             Span<char> nick = stackalloc char[pk.TrashCharCountNickname];
             int len = pk.LoadString(pk.NicknameTrash, nick);
@@ -137,7 +137,7 @@ public static class AutoLegalityWrapper
             Span<char> ot = stackalloc char[pk.TrashCharCountTrainer];
             int len = pk.LoadString(pk.OriginalTrainerTrash, ot);
             ot = ot[..len];
-            if (StringsUtil.IsSpammyString(ot) && !IsFixedOT(new LegalityAnalysis(pk).EncounterOriginal, pk))
+            if (StringsUtil.IsSpammyString(ot) && !IsFixedOT(enc, pk))
                 return false;
         }
         if (TradeRestrictions.IsUntradableHeld(pk.Context, pk.HeldItem))
@@ -148,6 +148,7 @@ public static class AutoLegalityWrapper
     public static bool IsFixedOT(IEncounterTemplate t, PKM pkm) => t switch
     {
         IFixedTrainer { IsFixedTrainer: true } => true,
+        EncounterGift9a { Trainer: not 0 } => true, // todo ZA DLC: remove me, implicitly covered by IFixedTrainer
         MysteryGift g => !g.IsEgg && g switch
         {
             WA9 wa9 => wa9.GetHasOT(pkm.Language),
@@ -180,8 +181,8 @@ public static class AutoLegalityWrapper
         throw new ArgumentException("Type does not have a recognized trainer fetch.", typeof(T).Name);
     }
 
-    public static ITrainerInfo GetTrainerInfo(byte gen) =>
-        TrainerSettings.GetSavedTrainerData(EntityContextExtensions.GetSingleGameVersion((EntityContext)gen));
+    public static ITrainerInfo GetTrainerInfo(GameVersion version) => TrainerSettings.GetSavedTrainerData(version);
+    public static ITrainerInfo GetTrainerInfo(EntityContext context) => TrainerSettings.GetSavedTrainerData(context);
 
     public static PKM GetLegal(this ITrainerInfo sav, IBattleTemplate set, out string res)
     {

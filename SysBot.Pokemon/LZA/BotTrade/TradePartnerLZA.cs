@@ -1,6 +1,7 @@
-using PKHeX.Core;
 using System;
 using System.Diagnostics;
+using PKHeX.Core;
+using static System.Buffers.Binary.BinaryPrimitives;
 
 namespace SysBot.Pokemon;
 

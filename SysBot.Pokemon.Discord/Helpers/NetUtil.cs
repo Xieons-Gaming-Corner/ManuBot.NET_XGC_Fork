@@ -1,20 +1,21 @@
-using Discord;
-using PKHeX.Core;
-using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Discord;
+using System.IO;
+using PKHeX.Core;
 
 namespace SysBot.Pokemon.Discord;
 
 public static class NetUtil
 {
+    private static readonly HttpClient Client = new();
+
     public static async Task<byte[]> DownloadFromUrlAsync(string url)
     {
-        using var client = new HttpClient();
-        return await client.GetByteArrayAsync(url).ConfigureAwait(false);
+        return await Client.GetByteArrayAsync(url).ConfigureAwait(false);
     }
 
-    public static async Task<Download<ISpeciesForm>> DownloadAttachmentAsync(IAttachment att)
+    public static async Task<Download<ISpeciesForm>> DownloadEntityAsync(this IAttachment att)
     {
         var result = new Download<ISpeciesForm> { SanitizedFileName = Format.Sanitize(att.Filename) };
 
@@ -29,6 +30,8 @@ public static class NetUtil
 
         // Download the resource and load the bytes into a buffer.
         var buffer = await DownloadFromUrlAsync(url).ConfigureAwait(false);
+
+        // Ensure it actually converts into a file we can use.
         var prefer = EntityFileExtension.GetContextFromExtension(result.SanitizedFileName);
 
         ISpeciesForm? entity = atType switch

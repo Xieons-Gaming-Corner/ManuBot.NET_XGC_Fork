@@ -41,7 +41,7 @@ If you need support for this fork, feel free to join our Discord server!
 
 # Example Implementations
 
-The driving force to develop this project is automated bots for Nintendo Switch Pokémon games. An example implementation is provided in this repo to demonstrate interesting tasks this framework is capable of performing. Refer to the [Wiki](https://github.com/kwsch/SysBot.NET/wiki) for more details on the supported Pokémon features.
+The driving force to develop this project is automated bots for Nintendo Switch Pokémon games. An example implementation is provided in this repository to demonstrate interesting tasks this framework is capable of performing. Refer to the [Wiki](https://github.com/kwsch/SysBot.NET/wiki) for more details on the supported Pokémon features.
 
 ## SysBot.Pokemon:
 - Class library using SysBot.Base to contain logic related to creating & running Sword/Shield bots.
@@ -63,10 +63,13 @@ The driving force to develop this project is automated bots for Nintendo Switch 
 - YouTube.com interface for remotely announcing when the distribution starts.
 - Provide a YouTube login ClientID, ClientSecret, and ChannelID for login.
 
-Uses [Discord.Net](https://github.com/discord-net/Discord.Net) , [TwitchLib](https://github.com/TwitchLib/TwitchLib) and [StreamingClientLibary](https://github.com/SaviorXTanren/StreamingClientLibrary) as a dependency via Nuget.
+Uses [Discord.Net](https://github.com/discord-net/Discord.Net), [TwitchLib](https://github.com/TwitchLib/TwitchLib), and [StreamingClientLibary](https://github.com/SaviorXTanren/StreamingClientLibrary) as a dependency via Nuget.
 
 ## Other Dependencies
 Pokémon API logic is provided by [PKHeX](https://github.com/kwsch/PKHeX/), and template generation is provided by [Auto-Legality Mod](https://github.com/architdate/PKHeX-Plugins/). Current template generation uses [@santacrab2](https://www.github.com/santacrab2)'s [Auto-Legality Mod fork](https://github.com/santacrab2/PKHeX-Plugins).
+
+# Disclaimer
+SysBot.NET performs online trading and raid hosting in a manner that is unlike real human behavior; no human will be doing these continuously without end. Keep in mind that abnormal behavior can be detected, tracked, and penalized at any time by the game developer. Use this program at your own risk.
 
 # License
 Refer to the `License.md` for details regarding licensing.

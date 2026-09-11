@@ -1,82 +1,81 @@
-using PKHeX.Core;
-using SysBot.Base;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using PKHeX.Core;
+using SysBot.Base;
 using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
 using TwitchLib.Communication.Clients;
-using TwitchLib.Communication.Events;
 using TwitchLib.Communication.Models;
 
 namespace SysBot.Pokemon.Twitch;
 
 public class TwitchBot<T> where T : PKM, new()
 {
-    private static PokeTradeHub<T> Hub = null!;
-    internal static TradeQueueInfo<T> Info => Hub.Queues.Info;
+    private static PokeTradeHub<T> _hub = null!;
+    internal static TradeQueueInfo<T> Info => _hub.Queues.Info;
 
     internal static readonly List<TwitchQueue<T>> QueuePool = [];
-    private readonly TwitchClient client;
-    private readonly string Channel;
-    private readonly TwitchSettings Settings;
+    private readonly TwitchClient _client;
+    private readonly string _channel;
+    private readonly TwitchSettings _settings;
 
     public TwitchBot(TwitchSettings settings, PokeTradeHub<T> hub)
     {
-        Hub = hub;
-        Settings = settings;
+        _hub = hub;
+        _settings = settings;
 
         var credentials = new ConnectionCredentials(settings.Username.ToLower(), settings.Token);
 
         var clientOptions = new ClientOptions
         {
-            MessagesAllowedInPeriod = settings.ThrottleMessages,
-            ThrottlingPeriod = TimeSpan.FromSeconds(settings.ThrottleSeconds),
-
-            WhispersAllowedInPeriod = settings.ThrottleWhispers,
-            WhisperThrottlingPeriod = TimeSpan.FromSeconds(settings.ThrottleWhispersSeconds),
-
             // message queue capacity is managed (10_000 for message & whisper separately)
             // message send interval is managed (50ms for each message sent)
         };
 
-        Channel = settings.Channel;
+        _channel = settings.Channel;
         WebSocketClient customClient = new(clientOptions);
-        client = new TwitchClient(customClient);
+        _client = new TwitchClient(customClient);
 
-        var cmd = settings.CommandPrefix;
-        client.Initialize(credentials, Channel, cmd, cmd);
+        _client.Initialize(credentials, _channel);
 
-        client.OnLog += Client_OnLog;
-        client.OnJoinedChannel += Client_OnJoinedChannel;
-        client.OnMessageReceived += Client_OnMessageReceived;
-        client.OnWhisperReceived += Client_OnWhisperReceived;
-        client.OnChatCommandReceived += Client_OnChatCommandReceived;
-        client.OnWhisperCommandReceived += Client_OnWhisperCommandReceived;
-        client.OnConnected += Client_OnConnected;
-        client.OnDisconnected += Client_OnDisconnected;
-        client.OnLeftChannel += Client_OnLeftChannel;
+        _client.OnJoinedChannel += Client_OnJoinedChannel;
+        _client.OnMessageReceived += Client_OnMessageReceived;
+        _client.OnWhisperReceived += Client_OnWhisperReceived;
+        _client.OnChatCommandReceived += Client_OnChatCommandReceived;
+        _client.OnWhisperCommandReceived += Client_OnWhisperCommandReceived;
+        _client.OnConnected += Client_OnConnected;
+        _client.OnDisconnected += Client_OnDisconnected;
+        _client.OnLeftChannel += Client_OnLeftChannel;
 
-        client.OnMessageSent += (_, e)
-            => LogUtil.LogText($"[{client.TwitchUsername}] - Message Sent in {e.SentMessage.Channel}: {e.SentMessage.Message}");
-        client.OnWhisperSent += (_, e)
-            => LogUtil.LogText($"[{client.TwitchUsername}] - Whisper Sent to @{e.Receiver}: {e.Message}");
+        _client.OnMessageSent += async (_, e) =>
+        {
+            LogUtil.LogText($"[{_client.TwitchUsername}] - Message Sent in {e.SentMessage.Channel}: {e.SentMessage.Message}");
+            await Task.CompletedTask;
+        };
 
-        client.OnMessageThrottled += (_, e)
-            => LogUtil.LogError($"Message Throttled: {e.Message}", "TwitchBot");
-        client.OnWhisperThrottled += (_, e)
-            => LogUtil.LogError($"Whisper Throttled: {e.Message}", "TwitchBot");
+        _client.OnMessageThrottled += async (_, e) =>
+        {
+            LogUtil.LogError($"Message Throttled: {e}");
+            await Task.CompletedTask;
+        };
 
-        client.OnError += (_, e) =>
-            LogUtil.LogError(e.Exception.Message + Environment.NewLine + e.Exception.StackTrace, "TwitchBot");
-        client.OnConnectionError += (_, e) =>
-            LogUtil.LogError(e.BotUsername + Environment.NewLine + e.Error.Message, "TwitchBot");
+        _client.OnError += (_, e) =>
+        {
+            LogUtil.LogError(e.Exception.Message + Environment.NewLine + e.Exception.StackTrace);
+            return Task.CompletedTask;
+        };
+        _client.OnConnectionError += (_, e) =>
+        {
+            LogUtil.LogError(e.BotUsername + Environment.NewLine + e.Error.Message);
+            return Task.CompletedTask;
+        };
 
-        client.Connect();
+        _ = _client.ConnectAsync();
 
-        EchoUtil.Forwarders.Add(msg => client.SendMessage(Channel, msg));
+        EchoUtil.Forwarders.Add(msg => _ = _client.SendMessageAsync(_channel, msg));
 
         // Turn on if verified
         // Hub.Queues.Forwarders.Add((bot, detail) => client.SendMessage(Channel, $"{bot.Connection.Name} is now trading (ID {detail.ID}) {detail.Trainer.TrainerName}"));
@@ -86,151 +85,160 @@ public class TwitchBot<T> where T : PKM, new()
     {
         Task.Run(async () =>
         {
-            client.SendMessage(Channel, "5...");
+            await _client.SendMessageAsync(_channel, "5...").ConfigureAwait(false);
             await Task.Delay(1_000).ConfigureAwait(false);
-            client.SendMessage(Channel, "4...");
+            await _client.SendMessageAsync(_channel, "4...").ConfigureAwait(false);
             await Task.Delay(1_000).ConfigureAwait(false);
-            client.SendMessage(Channel, "3...");
+            await _client.SendMessageAsync(_channel, "3...").ConfigureAwait(false);
             await Task.Delay(1_000).ConfigureAwait(false);
-            client.SendMessage(Channel, "2...");
+            await _client.SendMessageAsync(_channel, "2...").ConfigureAwait(false);
             await Task.Delay(1_000).ConfigureAwait(false);
-            client.SendMessage(Channel, "1...");
+            await _client.SendMessageAsync(_channel, "1...").ConfigureAwait(false);
             await Task.Delay(1_000).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(message))
-                client.SendMessage(Channel, message);
+                await _client.SendMessageAsync(_channel, message).ConfigureAwait(false);
         });
     }
 
-    private bool AddToTradeQueue(T pk, int code, PictoCode[]? code7b, OnWhisperReceivedArgs e, RequestSignificance sig, PokeRoutineType type, out string msg)
+    private bool AddToTradeQueue(T pk, int code, PictoCode[]? code7b, OnWhisperReceivedArgs e, RequestSignificance sig, PokeRoutineType type, out string message)
     {
         if (typeof(T) == typeof(PB7) && code7b is null)
         {
-            msg = $"@{e.WhisperMessage.Username} invalid Trade Code! Please write 3 names of available Pokémons." +
+            message = $"@{e.WhisperMessage.Username} invalid Trade Code! Please write 3 names of available Pokémons." +
                 $"Valid entries: Pikachu, Eevee, Bulbasaur, Charmander, Squirtle, Pidgey, Caterpie, Rattata, Jigglypuff, Diglett.";
             return false;
         }
 
         // var user = e.WhisperMessage.UserId;
-        var userID = ulong.Parse(e.WhisperMessage.UserId);
+        var userId = ulong.Parse(e.WhisperMessage.UserId);
         var name = e.WhisperMessage.DisplayName;
 
         var trainer = new PokeTradeTrainerInfo(name, ulong.Parse(e.WhisperMessage.UserId));
-        var notifier = new TwitchTradeNotifier<T>(pk, trainer, code, e.WhisperMessage.Username, client, Channel, Hub.Config.Twitch);
-        var tt = type == PokeRoutineType.SeedCheck ? PokeTradeType.Seed : PokeTradeType.Specific;
-        var detail = new PokeTradeDetail<T>(pk, trainer, notifier, tt, code, sig == RequestSignificance.Favored, code7b);
-        var trade = new TradeEntry<T>(detail, userID, type, name);
-
-        var added = Info.AddToTradeQueue(trade, userID, sig == RequestSignificance.Owner);
-
-        if (added == QueueResultAdd.AlreadyInQueue)
+        var notifier = new TwitchTradeNotifier<T>(pk, trainer, code, e.WhisperMessage.Username, _client, _channel, _hub.Config.Twitch);
+        var tradeType = type == PokeRoutineType.SeedCheck ? PokeTradeType.Seed : PokeTradeType.Specific;
+        var detail = new PokeTradeDetail<T>
         {
-            msg = $"@{name}: Sorry, you are already in the queue.";
+            IsFavored = sig.IsFavored,
+            Code = code,
+            Code7b = code7b,
+            TradeData = pk,
+            Trainer = trainer,
+            Notifier = notifier,
+            Type = tradeType,
+        };
+
+        var trade = new TradeEntry<T>(detail, userId, type, name);
+        var canAdd = Info.IsAbleToJoinQueue(trade, userId, sig.IsOwner);
+        if (canAdd != QueueResultAdd.CanAdd)
+        {
+            if (canAdd == QueueResultAdd.AlreadyInQueue)
+                message = $"@{name}: Sorry, you are already in the queue.";
+            else
+                message = $"@{name}: Sorry, can't add you.";
             return false;
         }
 
-        var position = Info.CheckPosition(userID, type);
-        msg = $"@{name}: Added to the {type} queue, unique ID: {detail.ID}. Current Position: {position.Position}";
+        Info.AddToTradeQueue(trade, userId, sig.IsOwner);
+        var position = Info.CheckPosition(userId, type);
+        message = $"@{name}: Added to the {type} queue, unique ID: {detail.Id}. Current Position: {position.Position}";
 
         var botct = Info.Hub.Bots.Count;
         if (position.Position > botct)
         {
             var eta = Info.Hub.Config.Queues.EstimateDelay(position.Position, botct);
-            msg += $". Estimated: {eta:F1} minutes.";
+            message += $". Estimated: {eta:F1} minutes.";
         }
+
+        detail.IsReady = true; // Now that we've messaged the user, the trade is ready for a bot to pick up.
         return true;
     }
 
-    private void Client_OnLog(object? sender, OnLogArgs e)
+    private Task Client_OnConnected(object? sender, OnConnectedEventArgs e)
     {
-        LogUtil.LogText($"[{client.TwitchUsername}] -[{e.BotUsername}] {e.Data}");
+        LogUtil.LogText($"[{_client.TwitchUsername}] - Connected as {e.BotUsername}");
+        return Task.CompletedTask;
     }
 
-    private void Client_OnConnected(object? sender, OnConnectedArgs e)
+    private async Task Client_OnDisconnected(object? sender, OnDisconnectedArgs e)
     {
-        LogUtil.LogText($"[{client.TwitchUsername}] - Connected {e.AutoJoinChannel} as {e.BotUsername}");
-    }
-
-    private async void Client_OnDisconnected(object? sender, OnDisconnectedEventArgs e)
-    {
-        LogUtil.LogText($"[{client.TwitchUsername}] - Disconnected.");
-        while (!client.IsConnected)
+        LogUtil.LogText($"[{_client.TwitchUsername}] - Disconnected.");
+        while (!_client.IsConnected)
         {
-            client.Reconnect();
-            await Task.Delay(5000).ConfigureAwait(false);
+            await _client.ReconnectAsync().ConfigureAwait(false);
+            await Task.Delay(1_000).ConfigureAwait(false);
         }
     }
 
-    private void Client_OnJoinedChannel(object? sender, OnJoinedChannelArgs e)
+    private async Task Client_OnJoinedChannel(object? sender, OnJoinedChannelArgs e)
     {
         LogUtil.LogInfo($"Joined {e.Channel}", e.BotUsername);
-        client.SendMessage(e.Channel, "Connected!");
+        await _client.SendMessageAsync(e.Channel, "Connected!").ConfigureAwait(false);
     }
 
-    private void Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
+    private async Task Client_OnMessageReceived(object? sender, OnMessageReceivedArgs e)
     {
-        LogUtil.LogText($"[{client.TwitchUsername}] - Received message: @{e.ChatMessage.Username}: {e.ChatMessage.Message}");
-        if (client.JoinedChannels.Count == 0)
-            client.JoinChannel(e.ChatMessage.Channel);
+        LogUtil.LogText($"[{_client.TwitchUsername}] - Received message: @{e.ChatMessage.Username}: {e.ChatMessage.Message}");
+        if (_client.JoinedChannels.Count == 0)
+            await _client.JoinChannelAsync(e.ChatMessage.Channel).ConfigureAwait(false);
     }
 
-    private void Client_OnLeftChannel(object? sender, OnLeftChannelArgs e)
+    private async Task Client_OnLeftChannel(object? sender, OnLeftChannelArgs e)
     {
-        LogUtil.LogText($"[{client.TwitchUsername}] - Left channel {e.Channel}");
-        client.JoinChannel(e.Channel);
+        LogUtil.LogText($"[{_client.TwitchUsername}] - Left channel {e.Channel}");
+        await _client.JoinChannelAsync(e.Channel).ConfigureAwait(false);
     }
 
-    private void Client_OnChatCommandReceived(object? sender, OnChatCommandReceivedArgs e)
+    private async Task Client_OnChatCommandReceived(object? sender, OnChatCommandReceivedArgs e)
     {
-        if (!Hub.Config.Twitch.AllowCommandsViaChannel || Hub.Config.Twitch.UserBlacklist.Contains(e.Command.ChatMessage.Username))
+        if (!_hub.Config.Twitch.AllowCommandsViaChannel || _hub.Config.Twitch.UserBlacklist.Contains(e.ChatMessage.Username))
             return;
 
-        var msg = e.Command.ChatMessage;
-        var c = e.Command.CommandText.ToLower();
+        var msg = e.ChatMessage;
+        var c = e.Command.Name.ToLower();
         var args = e.Command.ArgumentsAsString;
         var response = HandleCommand(msg, c, args, false);
         if (response.Length == 0)
             return;
 
-        var channel = e.Command.ChatMessage.Channel;
-        client.SendMessage(channel, response);
+        var channel = e.ChatMessage.Channel;
+        await _client.SendMessageAsync(channel, response).ConfigureAwait(false);
     }
 
-    private void Client_OnWhisperCommandReceived(object? sender, OnWhisperCommandReceivedArgs e)
+    private async Task Client_OnWhisperCommandReceived(object? sender, OnWhisperCommandReceivedArgs e)
     {
-        if (!Hub.Config.Twitch.AllowCommandsViaWhisper || Hub.Config.Twitch.UserBlacklist.Contains(e.Command.WhisperMessage.Username))
+        if (!_hub.Config.Twitch.AllowCommandsViaWhisper || _hub.Config.Twitch.UserBlacklist.Contains(e.WhisperMessage.Username))
             return;
 
-        var msg = e.Command.WhisperMessage;
-        var c = e.Command.CommandText.ToLower();
+        var msg = e.WhisperMessage;
+        var c = e.Command.Name.ToLower();
         var args = e.Command.ArgumentsAsString;
         var response = HandleCommand(msg, c, args, true);
         if (response.Length == 0)
             return;
 
-        client.SendWhisper(msg.Username, response);
+        await _client.SendMessageAsync(_channel, $"/w {msg.Username} {response}").ConfigureAwait(false);
     }
 
     private string HandleCommand(TwitchLibMessage m, string c, string args, bool whisper)
     {
-        bool sudo() => m is ChatMessage ch && (ch.IsBroadcaster || Settings.IsSudo(m.Username));
-        bool subscriber() => m is ChatMessage { IsSubscriber: true };
+        bool IsSudo() => m is ChatMessage ch && (ch.IsBroadcaster || _settings.IsSudo(m.Username));
+        bool IsSubscriber() => m is ChatMessage { SubscribedMonthCount: > 0 };
 
         switch (c)
         {
             // User Usable Commands
             case "donate":
-                return !string.IsNullOrWhiteSpace(Settings.DonationLink) ?
-                    $"Here's the donation link! Thank you for your support :3 {Settings.DonationLink}" : string.Empty;
+                return !string.IsNullOrWhiteSpace(_settings.DonationLink) ?
+                    $"Here's the donation link! Thank you for your support :3 {_settings.DonationLink}" : string.Empty;
             case "discord":
-                return !string.IsNullOrWhiteSpace(Settings.DonationLink) ?
-                    $"Here's the Discord Server Link, have a nice stay :3 {Settings.DiscordLink}" : string.Empty;
+                return !string.IsNullOrWhiteSpace(_settings.DonationLink) ?
+                    $"Here's the Discord Server Link, have a nice stay :3 {_settings.DiscordLink}" : string.Empty;
             case "tutorial":
             case "help":
-                return $"{Settings.TutorialText} {Settings.TutorialLink}";
+                return $"{_settings.TutorialText} {_settings.TutorialLink}";
             case "trade":
-            case "t":
-                var _ = TwitchCommandsHelper<T>.AddToWaitingList(args, m.DisplayName, m.Username, ulong.Parse(m.UserId), subscriber(), out string msg);
-                return msg;
+                var _ = TwitchCommandsHelper<T>.AddToWaitingList(args, m.DisplayName, m.Username, ulong.Parse(m.UserId), IsSubscriber(), out var message);
+                return message;
             case "ts":
             case "queue":
             case "position":
@@ -244,11 +252,11 @@ public class TwitchBot<T> where T : PKM, new()
                 return TwitchCommandsHelper<T>.GetCode(ulong.Parse(m.UserId));
 
             // Sudo Only Commands
-            case "tca" when !sudo():
-            case "pr" when !sudo():
-            case "pc" when !sudo():
-            case "tt" when !sudo():
-            case "tcu" when !sudo():
+            case "tca" when !IsSudo():
+            case "pr" when !IsSudo():
+            case "pc" when !IsSudo():
+            case "tt" when !IsSudo():
+            case "tcu" when !IsSudo():
                 return "This command is locked for sudo users only!";
 
             case "tca":
@@ -256,7 +264,7 @@ public class TwitchBot<T> where T : PKM, new()
                 return "Cleared all queues!";
 
             case "pr":
-                return Info.Hub.Ledy.Pool.Reload(Hub.Config.Folder.DistributeFolder) ? $"Reloaded from folder. Pool count: {Info.Hub.Ledy.Pool.Count}" : "Failed to reload from folder.";
+                return Info.Hub.Ledy.Pool.Reload(_hub.Config.Folder.DistributeFolder) ? $"Reloaded from folder. Pool count: {Info.Hub.Ledy.Pool.Count}" : "Failed to reload from folder.";
 
             case "pc":
                 return $"The pool count is: {Info.Hub.Ledy.Pool.Count}";
@@ -273,19 +281,22 @@ public class TwitchBot<T> where T : PKM, new()
         }
     }
 
-    private void Client_OnWhisperReceived(object? sender, OnWhisperReceivedArgs e)
+    private async Task Client_OnWhisperReceived(object? sender, OnWhisperReceivedArgs e)
     {
-        LogUtil.LogText($"[{client.TwitchUsername}] - @{e.WhisperMessage.Username}: {e.WhisperMessage.Message}");
+        LogUtil.LogText($"[{_client.TwitchUsername}] - @{e.WhisperMessage.Username}: {e.WhisperMessage.Message}");
         if (QueuePool.Count > 100)
         {
             var removed = QueuePool[0];
             QueuePool.RemoveAt(0); // First in, first out
-            client.SendMessage(Channel, $"Removed @{removed.DisplayName} ({(Species)removed.Entity.Species}) from the waiting list: stale request.");
+
+            var message = $"Removed @{removed.DisplayName} ({(Species)removed.Entity.Species}) from the waiting list: stale request.";
+            await _client.SendMessageAsync(_channel, message).ConfigureAwait(false);
         }
 
-        var user = QueuePool.FindLast(q => q.UserName == e.WhisperMessage.Username);
+        var user = QueuePool.FindLast(q => q.Username == e.WhisperMessage.Username);
         if (user == null)
             return;
+
         QueuePool.Remove(user);
         var msg = e.WhisperMessage.Message;
         try
@@ -293,13 +304,13 @@ public class TwitchBot<T> where T : PKM, new()
             var code7b = typeof(T) == typeof(PB7) ? ParsePokemonNames(msg) : null;
             int code = typeof(T) != typeof(PB7) ? Util.ToInt32(msg) : 0;
             var sig = GetUserSignificance(user);
-            _ = AddToTradeQueue(user.Entity, code, code7b, e, sig, PokeRoutineType.LinkTrade, out string message);
-            client.SendMessage(Channel, message);
+            _ = AddToTradeQueue(user.Entity, code, code7b, e, sig, PokeRoutineType.LinkTrade, out var message);
+            await _client.SendMessageAsync(_channel, message).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            LogUtil.LogSafe(ex, nameof(TwitchBot<T>));
-            LogUtil.LogError($"{ex.Message}", nameof(TwitchBot<T>));
+            LogUtil.LogSafe(ex);
+            LogUtil.LogError($"{ex.Message}");
         }
     }
 
@@ -334,10 +345,10 @@ public class TwitchBot<T> where T : PKM, new()
 
     private RequestSignificance GetUserSignificance(TwitchQueue<T> user)
     {
-        var name = user.UserName;
-        if (name == Channel)
+        var name = user.Username;
+        if (name == _channel)
             return RequestSignificance.Owner;
-        if (Settings.IsSudo(user.UserName))
+        if (_settings.IsSudo(user.Username))
             return RequestSignificance.Favored;
         return user.IsSubscriber ? RequestSignificance.Favored : RequestSignificance.None;
     }
